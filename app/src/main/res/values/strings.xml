@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Child Screen Time Parent</string>
+    <string name="scan_devices">Scan for Child Devices</string>
+    <string name="no_devices_found">No child devices found on network</string>
+    <string name="discovery_in_progress">Scanning for child devices...</string>
+    <string name="device_selected">Device selected: %1$s</string>
+    <string name="discovery_failed">Device discovery failed: %1$s</string>
+    <string name="devices_found">Found %1$d device(s)</string>
+</resources>
