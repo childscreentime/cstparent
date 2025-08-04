@@ -1,7 +1,9 @@
 package io.github.childscreentime.parent.ui.activities;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -33,6 +35,13 @@ public class MainActivity extends Activity {
     private static final String COMMAND_PREFIX = "CST_CMD:";
     private static final String RESPONSE_PREFIX = "CST_RESP:";
     
+    // SharedPreferences constants
+    private static final String PREFS_NAME = "parent_app_prefs";
+    private static final String KEY_DEVICES = "discovered_devices";
+    private static final String KEY_ADDRESSES = "device_addresses";
+    private static final String KEY_DEVICE_IDS = "device_ids";
+    private static final String KEY_SELECTED_DEVICE = "selected_device";
+    
     private ListView deviceList;
     private Button scanButton;
     private Button getTimeButton;
@@ -42,15 +51,16 @@ public class MainActivity extends Activity {
     private TextView statusText;
     private TextView advancedToggle;
     private LinearLayout advancedSection;
-    private EditText deviceIdInput;
     private EditText extendMinutesInput;
     private EditText commandInput;
     private ArrayAdapter<String> deviceAdapter;
     private List<String> discoveredDevices;
     private Map<String, String> deviceAddresses; // Maps display name to IP address
+    private Map<String, String> deviceIds; // Maps display name to device ID
     private ExecutorService executorService;
     private Handler mainHandler;
     private String selectedDeviceAddress;
+    private String selectedDeviceId;
     private ParentEncryptionManager encryptionManager;
 
     @Override
@@ -65,6 +75,10 @@ public class MainActivity extends Activity {
         executorService = Executors.newCachedThreadPool();
         mainHandler = new Handler(Looper.getMainLooper());
         deviceAddresses = new HashMap<>();
+        deviceIds = new HashMap<>();
+        
+        // Load saved device selection
+        loadSavedDeviceSelection();
     }
     
     private int getLayoutId() {
@@ -81,7 +95,6 @@ public class MainActivity extends Activity {
         statusText = findViewById(getResources().getIdentifier("status_text", "id", getPackageName()));
         advancedToggle = findViewById(getResources().getIdentifier("advanced_toggle", "id", getPackageName()));
         advancedSection = findViewById(getResources().getIdentifier("advanced_section", "id", getPackageName()));
-        deviceIdInput = findViewById(getResources().getIdentifier("device_id_input", "id", getPackageName()));
         extendMinutesInput = findViewById(getResources().getIdentifier("extend_minutes_input", "id", getPackageName()));
         commandInput = findViewById(getResources().getIdentifier("command_input", "id", getPackageName()));
     }
@@ -94,13 +107,15 @@ public class MainActivity extends Activity {
         deviceList.setOnItemClickListener((parent, view, position, id) -> {
             String selectedDevice = discoveredDevices.get(position);
             selectedDeviceAddress = deviceAddresses.get(selectedDevice);
-            Toast.makeText(this, "Selected: " + selectedDevice, Toast.LENGTH_SHORT).show();
             
-            // Enable command sending once device is selected
-            getTimeButton.setEnabled(true);
-            lockDeviceButton.setEnabled(true);
-            extendTimeButton.setEnabled(true);
-            sendCommandButton.setEnabled(true);
+            // Check if we already have a device ID for this device
+            if (deviceIds.containsKey(selectedDevice)) {
+                selectedDeviceId = deviceIds.get(selectedDevice);
+                onDeviceSelected(selectedDevice);
+            } else {
+                // Prompt for device ID
+                promptForDeviceId(selectedDevice);
+            }
         });
     }
     
@@ -150,84 +165,84 @@ public class MainActivity extends Activity {
         scanButton.setEnabled(false);
         discoveredDevices.clear();
         deviceAddresses.clear();
+        deviceIds.clear(); // Clear saved device IDs
         deviceAdapter.notifyDataSetChanged();
         selectedDeviceAddress = null;
+        selectedDeviceId = null;
         getTimeButton.setEnabled(false);
         lockDeviceButton.setEnabled(false);
         extendTimeButton.setEnabled(false);
         sendCommandButton.setEnabled(false);
         
+        // Clear saved preferences when scanning
+        clearSavedDeviceSelection();
+        
         executorService.execute(this::performDeviceDiscovery);
     }
     
     private void sendCommand(String command) {
-        String deviceId = deviceIdInput.getText().toString().trim();
-        
-        if (TextUtils.isEmpty(deviceId)) {
-            Toast.makeText(this, "Please enter the child device ID", Toast.LENGTH_SHORT).show();
+        if (selectedDeviceId == null || selectedDeviceId.trim().isEmpty()) {
+            Toast.makeText(this, "No device selected or device ID missing", Toast.LENGTH_SHORT).show();
             return;
         }
         
         if (selectedDeviceAddress == null) {
-            Toast.makeText(this, "Please select a device first", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "No device address available", Toast.LENGTH_SHORT).show();
             return;
         }
-        
-        // Initialize encryption manager with device ID
-        try {
-            encryptionManager = new ParentEncryptionManager(deviceId);
-        } catch (RuntimeException e) {
-            Toast.makeText(this, "Invalid Device ID - encryption failed", Toast.LENGTH_LONG).show();
-            return;
-        }
-        
-        statusText.setText("Sending " + command + "...");
-        disableAllCommandButtons();
         
         executorService.execute(() -> {
             try {
-                // Encrypt the command
-                String encryptedCommand = encryptionManager.encryptMessage(command);
-                String fullMessage = COMMAND_PREFIX + encryptedCommand;
+                if (encryptionManager == null) {
+                    encryptionManager = new ParentEncryptionManager();
+                }
                 
-                // Send encrypted command
+                String encryptedCommand = encryptionManager.encrypt(command, selectedDeviceId.trim());
+                String message = COMMAND_PREFIX + encryptedCommand;
+                
+                mainHandler.post(() -> statusText.setText("Sending command: " + command));
+                Log.d("ParentApp", "Sending command: " + command + " to " + selectedDeviceAddress);
+                
                 DatagramSocket socket = new DatagramSocket();
-                socket.setSoTimeout(10000); // 10 second timeout
+                socket.setSoTimeout(5000);
                 
-                byte[] messageBytes = fullMessage.getBytes();
-                InetAddress targetAddress = InetAddress.getByName(selectedDeviceAddress);
-                DatagramPacket packet = new DatagramPacket(
-                    messageBytes, messageBytes.length, targetAddress, DISCOVERY_PORT);
+                byte[] messageBytes = message.getBytes();
+                InetAddress address = InetAddress.getByName(selectedDeviceAddress);
+                DatagramPacket packet = new DatagramPacket(messageBytes, messageBytes.length, address, DISCOVERY_PORT);
                 
                 socket.send(packet);
+                Log.d("ParentApp", "Command sent successfully");
                 
-                // Listen for encrypted response
-                byte[] buffer = new byte[1024];
-                DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length);
+                // Listen for response
+                byte[] responseBuffer = new byte[1024];
+                DatagramPacket responsePacket = new DatagramPacket(responseBuffer, responseBuffer.length);
                 socket.receive(responsePacket);
                 
                 String response = new String(responsePacket.getData(), 0, responsePacket.getLength());
+                Log.d("ParentApp", "Received response: " + response);
+                
                 if (response.startsWith(RESPONSE_PREFIX)) {
                     String encryptedResponse = response.substring(RESPONSE_PREFIX.length());
-                    String decryptedResponse = encryptionManager.decryptMessage(encryptedResponse);
+                    String decryptedResponse = encryptionManager.decrypt(encryptedResponse, selectedDeviceId.trim());
                     
                     mainHandler.post(() -> {
-                        statusText.setText(formatResponse(decryptedResponse));
-                        enableAllCommandButtons();
+                        statusText.setText("Response: " + decryptedResponse);
+                        Toast.makeText(MainActivity.this, "Command successful: " + decryptedResponse, Toast.LENGTH_LONG).show();
                     });
                 } else {
                     mainHandler.post(() -> {
                         statusText.setText("Unexpected response format");
-                        enableAllCommandButtons();
+                        Toast.makeText(MainActivity.this, "Unexpected response format", Toast.LENGTH_SHORT).show();
                     });
                 }
                 
                 socket.close();
                 
             } catch (Exception e) {
+                Log.e("ParentApp", "Error sending command", e);
                 mainHandler.post(() -> {
-                    statusText.setText("Command failed: " + e.getMessage());
-                    enableAllCommandButtons();
+                    statusText.setText("Error: " + e.getMessage());
+                    Toast.makeText(MainActivity.this, "Error sending command: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         });
@@ -362,6 +377,85 @@ public class MainActivity extends Activity {
         }
         
         return response;
+    }
+    
+    private void promptForDeviceId(String selectedDevice) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Enter Device ID");
+        builder.setMessage("Please enter the Device ID for " + selectedDevice);
+        
+        final EditText input = new EditText(this);
+        input.setHint("Device ID");
+        builder.setView(input);
+        
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            String deviceId = input.getText().toString().trim();
+            if (!deviceId.isEmpty()) {
+                selectedDeviceId = deviceId;
+                deviceIds.put(selectedDevice, deviceId);
+                saveDeviceSelection(selectedDevice, selectedDeviceAddress, deviceId);
+                onDeviceSelected(selectedDevice);
+            } else {
+                Toast.makeText(this, "Device ID cannot be empty", Toast.LENGTH_SHORT).show();
+            }
+        });
+        
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+        builder.show();
+    }
+    
+    private void onDeviceSelected(String selectedDevice) {
+        Toast.makeText(this, "Selected: " + selectedDevice, Toast.LENGTH_SHORT).show();
+        
+        // Enable command sending once device is selected
+        getTimeButton.setEnabled(true);
+        lockDeviceButton.setEnabled(true);
+        extendTimeButton.setEnabled(true);
+        sendCommandButton.setEnabled(true);
+    }
+    
+    private void loadSavedDeviceSelection() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String savedDevice = prefs.getString(KEY_SELECTED_DEVICE, "");
+        
+        if (!savedDevice.isEmpty()) {
+            // Extract stored data
+            String[] parts = savedDevice.split("\\|");
+            if (parts.length == 3) {
+                String deviceName = parts[0];
+                String deviceAddress = parts[1];
+                String deviceId = parts[2];
+                
+                // Restore selection
+                selectedDeviceAddress = deviceAddress;
+                selectedDeviceId = deviceId;
+                deviceAddresses.put(deviceName, deviceAddress);
+                deviceIds.put(deviceName, deviceId);
+                
+                // Add to discovered devices list
+                discoveredDevices.add(deviceName);
+                deviceAdapter.notifyDataSetChanged();
+                
+                onDeviceSelected(deviceName);
+            }
+        }
+    }
+    
+    private void saveDeviceSelection(String deviceName, String deviceAddress, String deviceId) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        
+        // Store as "deviceName|deviceAddress|deviceId"
+        String deviceData = deviceName + "|" + deviceAddress + "|" + deviceId;
+        editor.putString(KEY_SELECTED_DEVICE, deviceData);
+        editor.apply();
+    }
+    
+    private void clearSavedDeviceSelection() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.remove(KEY_SELECTED_DEVICE);
+        editor.apply();
     }
     
     @Override

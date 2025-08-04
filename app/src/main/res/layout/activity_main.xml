@@ -81,27 +81,6 @@
             android:textColor="#333333"
             android:layout_marginBottom="12dp" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Enter the Device ID shown on the child device:"
-            android:textSize="14sp"
-            android:textColor="#666666"
-            android:layout_marginBottom="8dp" />
-
-        <EditText
-            android:id="@+id/device_id_input"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Enter Device ID (e.g., A1B2C3D4E5F6G7H8)"
-            android:textSize="14sp"
-            android:fontFamily="monospace"
-            android:inputType="textCapCharacters"
-            android:maxLength="16"
-            android:background="#f0f0f0"
-            android:padding="12dp"
-            android:layout_marginBottom="16dp" />
-
         <!-- Quick Action Buttons -->
         <TextView
             android:layout_width="match_parent"
