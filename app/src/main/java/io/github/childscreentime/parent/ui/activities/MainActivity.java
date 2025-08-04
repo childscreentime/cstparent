@@ -20,29 +20,6 @@ import java.net.DatagramSocket;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
-import android.os.Handler;
-import android.os.Looper;
-import io.github.childscreentime.parent.core.ParentEncryptionManager;
-
-import android.app.Activity;
-import android.content.Intent;
-import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-import android.widget.ListView;
-import android.widget.TextView;
-import android.widget.Toast;
-import android.widget.ArrayAdapter;
-import android.widget.EditText;
-import android.text.TextUtils;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
-import java.net.DatagramSocket;
-import java.net.DatagramPacket;
-import java.net.InetAddress;
-import java.net.SocketTimeoutException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import android.os.Handler;
@@ -71,6 +48,7 @@ public class MainActivity extends Activity {
     private ArrayAdapter<String> deviceAdapter;
     private List<String> discoveredDevices;
     private Map<String, String> deviceAddresses; // Maps display name to IP address
+    private ExecutorService executorService;
     private Handler mainHandler;
     private String selectedDeviceAddress;
     private ParentEncryptionManager encryptionManager;
@@ -84,6 +62,7 @@ public class MainActivity extends Activity {
         setupDeviceList();
         setupButtons();
         
+        executorService = Executors.newCachedThreadPool();
         mainHandler = new Handler(Looper.getMainLooper());
         deviceAddresses = new HashMap<>();
     }
@@ -178,7 +157,7 @@ public class MainActivity extends Activity {
         extendTimeButton.setEnabled(false);
         sendCommandButton.setEnabled(false);
         
-        performDeviceDiscovery();
+        executorService.execute(this::performDeviceDiscovery);
     }
     
     private void sendCommand(String command) {
@@ -205,44 +184,53 @@ public class MainActivity extends Activity {
         statusText.setText("Sending " + command + "...");
         disableAllCommandButtons();
         
-        try {
-            // Encrypt the command
-            String encryptedCommand = encryptionManager.encryptMessage(command);
-            String fullMessage = COMMAND_PREFIX + encryptedCommand;
-            
-            // Send encrypted command
-            DatagramSocket socket = new DatagramSocket();
-            socket.setSoTimeout(10000); // 10 second timeout
-            
-            byte[] messageBytes = fullMessage.getBytes();
-            InetAddress targetAddress = InetAddress.getByName(selectedDeviceAddress);
-            DatagramPacket packet = new DatagramPacket(
-                messageBytes, messageBytes.length, targetAddress, DISCOVERY_PORT);
-            
-            socket.send(packet);
-            
-            // Listen for encrypted response
-            byte[] buffer = new byte[1024];
-            DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length);
-            socket.receive(responsePacket);
-            
-            String response = new String(responsePacket.getData(), 0, responsePacket.getLength());
-            if (response.startsWith(RESPONSE_PREFIX)) {
-                String encryptedResponse = response.substring(RESPONSE_PREFIX.length());
-                String decryptedResponse = encryptionManager.decryptMessage(encryptedResponse);
+        executorService.execute(() -> {
+            try {
+                // Encrypt the command
+                String encryptedCommand = encryptionManager.encryptMessage(command);
+                String fullMessage = COMMAND_PREFIX + encryptedCommand;
                 
-                statusText.setText(formatResponse(decryptedResponse));
-            } else {
-                statusText.setText("Unexpected response format");
+                // Send encrypted command
+                DatagramSocket socket = new DatagramSocket();
+                socket.setSoTimeout(10000); // 10 second timeout
+                
+                byte[] messageBytes = fullMessage.getBytes();
+                InetAddress targetAddress = InetAddress.getByName(selectedDeviceAddress);
+                DatagramPacket packet = new DatagramPacket(
+                    messageBytes, messageBytes.length, targetAddress, DISCOVERY_PORT);
+                
+                socket.send(packet);
+                
+                // Listen for encrypted response
+                byte[] buffer = new byte[1024];
+                DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length);
+                socket.receive(responsePacket);
+                
+                String response = new String(responsePacket.getData(), 0, responsePacket.getLength());
+                if (response.startsWith(RESPONSE_PREFIX)) {
+                    String encryptedResponse = response.substring(RESPONSE_PREFIX.length());
+                    String decryptedResponse = encryptionManager.decryptMessage(encryptedResponse);
+                    
+                    mainHandler.post(() -> {
+                        statusText.setText(formatResponse(decryptedResponse));
+                        enableAllCommandButtons();
+                    });
+                } else {
+                    mainHandler.post(() -> {
+                        statusText.setText("Unexpected response format");
+                        enableAllCommandButtons();
+                    });
+                }
+                
+                socket.close();
+                
+            } catch (Exception e) {
+                mainHandler.post(() -> {
+                    statusText.setText("Command failed: " + e.getMessage());
+                    enableAllCommandButtons();
+                });
             }
-            
-            socket.close();
-            
-        } catch (Exception e) {
-            statusText.setText("Command failed: " + e.getMessage());
-        } finally {
-            enableAllCommandButtons();
-        }
+        });
     }
     
     private void toggleAdvancedSection() {
@@ -379,5 +367,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (executorService != null) {
+            executorService.shutdown();
+        }
     }
 }
