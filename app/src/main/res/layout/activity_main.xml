@@ -100,36 +100,144 @@
             android:maxLength="16"
             android:background="#f0f0f0"
             android:padding="12dp"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginBottom="16dp" />
 
+        <!-- Quick Action Buttons -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Command:"
-            android:textSize="14sp"
-            android:textColor="#666666"
+            android:text="Quick Actions:"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
             android:layout_marginBottom="8dp" />
 
-        <EditText
-            android:id="@+id/command_input"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Enter command (e.g., GET_STATUS, PING, LOCK_DEVICE)"
-            android:textSize="14sp"
-            android:background="#f0f0f0"
-            android:padding="12dp"
-            android:layout_marginBottom="12dp" />
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
 
-        <Button
-            android:id="@+id/send_command_button"
+            <Button
+                android:id="@+id/get_time_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Get Time Left"
+                android:textSize="14sp"
+                android:textColor="#ffffff"
+                android:background="#2196F3"
+                android:padding="10dp"
+                android:layout_marginEnd="8dp"
+                android:enabled="false" />
+
+            <Button
+                android:id="@+id/lock_device_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Lock Device"
+                android:textSize="14sp"
+                android:textColor="#ffffff"
+                android:background="#F44336"
+                android:padding="10dp"
+                android:enabled="false" />
+
+        </LinearLayout>
+
+        <!-- Extend Time Section -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Send Encrypted Command"
-            android:textSize="16sp"
-            android:textColor="#ffffff"
-            android:background="#FF9800"
-            android:padding="12dp"
-            android:enabled="false" />
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <Button
+                android:id="@+id/extend_time_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Extend Time"
+                android:textSize="14sp"
+                android:textColor="#ffffff"
+                android:background="#4CAF50"
+                android:padding="10dp"
+                android:layout_marginEnd="8dp"
+                android:enabled="false" />
+
+            <EditText
+                android:id="@+id/extend_minutes_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="Minutes (1-1440)"
+                android:text="30"
+                android:textSize="14sp"
+                android:inputType="number"
+                android:background="#f0f0f0"
+                android:padding="10dp"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="min"
+                android:textSize="14sp"
+                android:textColor="#666666"
+                android:gravity="center_vertical"
+                android:layout_gravity="center_vertical" />
+
+        </LinearLayout>
+
+        <!-- Advanced Section (Collapsible) -->
+        <TextView
+            android:id="@+id/advanced_toggle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="▼ Advanced / Custom Command"
+            android:textSize="14sp"
+            android:textColor="#666666"
+            android:padding="8dp"
+            android:background="#f8f8f8"
+            android:clickable="true"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:id="@+id/advanced_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Custom Command:"
+                android:textSize="14sp"
+                android:textColor="#666666"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/command_input"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Enter custom command (e.g., GET_TIME_LEFT)"
+                android:textSize="14sp"
+                android:background="#f0f0f0"
+                android:padding="12dp"
+                android:layout_marginBottom="12dp" />
+
+            <Button
+                android:id="@+id/send_command_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Send Custom Command"
+                android:textSize="16sp"
+                android:textColor="#ffffff"
+                android:background="#FF9800"
+                android:padding="12dp"
+                android:enabled="false" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
