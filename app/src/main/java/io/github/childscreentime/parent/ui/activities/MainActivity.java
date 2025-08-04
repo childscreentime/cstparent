@@ -61,7 +61,6 @@ public class MainActivity extends Activity {
     private Handler mainHandler;
     private String selectedDeviceAddress;
     private String selectedDeviceId;
-    private ParentEncryptionManager encryptionManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -193,9 +192,8 @@ public class MainActivity extends Activity {
         
         executorService.execute(() -> {
             try {
-                if (encryptionManager == null) {
-                    encryptionManager = new ParentEncryptionManager();
-                }
+                // Create encryption manager with the selected device ID
+                ParentEncryptionManager encryptionManager = new ParentEncryptionManager(selectedDeviceId.trim());
                 
                 String encryptedCommand = encryptionManager.encrypt(command, selectedDeviceId.trim());
                 String message = COMMAND_PREFIX + encryptedCommand;
