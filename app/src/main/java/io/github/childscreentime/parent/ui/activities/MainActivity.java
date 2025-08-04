@@ -143,6 +143,8 @@ public class MainActivity extends Activity {
     
     private void performDeviceDiscovery() {
         try {
+            android.util.Log.d("ParentApp", "Starting device discovery...");
+            
             DatagramSocket socket = new DatagramSocket();
             socket.setBroadcast(true);
             socket.setSoTimeout(5000); // 5 second timeout
@@ -153,21 +155,31 @@ public class MainActivity extends Activity {
             DatagramPacket packet = new DatagramPacket(
                 messageBytes, messageBytes.length, broadcastAddress, DISCOVERY_PORT);
             
+            android.util.Log.d("ParentApp", "Sending broadcast to " + broadcastAddress.getHostAddress() + ":" + DISCOVERY_PORT);
             socket.send(packet);
+            android.util.Log.d("ParentApp", "Broadcast sent successfully. Listening for responses...");
             
             // Listen for responses
             byte[] buffer = new byte[1024];
             long startTime = System.currentTimeMillis();
+            int responseCount = 0;
             
             while (System.currentTimeMillis() - startTime < 5000) {
                 try {
                     DatagramPacket responsePacket = new DatagramPacket(buffer, buffer.length);
                     socket.receive(responsePacket);
+                    responseCount++;
                     
                     String response = new String(responsePacket.getData(), 0, responsePacket.getLength());
+                    String senderIP = responsePacket.getAddress().getHostAddress();
+                    
+                    android.util.Log.d("ParentApp", "Response #" + responseCount + " from " + senderIP + ": '" + response + "'");
+                    
                     if (EXPECTED_RESPONSE.equals(response)) {
                         String deviceIP = responsePacket.getAddress().getHostAddress();
                         String displayName = "Child Device: " + deviceIP;
+                        
+                        android.util.Log.d("ParentApp", "✓ Valid child device found: " + deviceIP);
                         
                         mainHandler.post(() -> {
                             if (!discoveredDevices.contains(displayName)) {
@@ -176,22 +188,29 @@ public class MainActivity extends Activity {
                                 deviceAdapter.notifyDataSetChanged();
                             }
                         });
+                    } else {
+                        android.util.Log.d("ParentApp", "✗ Unexpected response (expected: '" + EXPECTED_RESPONSE + "')");
                     }
                 } catch (SocketTimeoutException e) {
                     // Continue listening until total timeout
                 }
             }
             
+            android.util.Log.d("ParentApp", "Discovery completed. Responses received: " + responseCount + ", Devices found: " + discoveredDevices.size());
+            
             socket.close();
+            
+            android.util.Log.d("ParentApp", "Socket closed. Final device count: " + discoveredDevices.size());
             
             mainHandler.post(() -> {
                 statusText.setText(discoveredDevices.isEmpty() ? 
-                    "No child devices found" : 
+                    "No child devices found. Check WiFi and child app." : 
                     "Found " + discoveredDevices.size() + " device(s). Select one and enter Device ID.");
                 scanButton.setEnabled(true);
             });
             
         } catch (Exception e) {
+            android.util.Log.e("ParentApp", "Discovery error: " + e.getMessage(), e);
             mainHandler.post(() -> {
                 statusText.setText("Discovery failed: " + e.getMessage());
                 scanButton.setEnabled(true);
