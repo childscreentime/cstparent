@@ -195,7 +195,7 @@ public class MainActivity extends Activity {
                 // Create encryption manager with the selected device ID
                 ParentEncryptionManager encryptionManager = new ParentEncryptionManager(selectedDeviceId.trim());
                 
-                String encryptedCommand = encryptionManager.encrypt(command, selectedDeviceId.trim());
+                String encryptedCommand = encryptionManager.encryptMessage(command);
                 String message = COMMAND_PREFIX + encryptedCommand;
                 
                 mainHandler.post(() -> statusText.setText("Sending command: " + command));
@@ -221,7 +221,7 @@ public class MainActivity extends Activity {
                 
                 if (response.startsWith(RESPONSE_PREFIX)) {
                     String encryptedResponse = response.substring(RESPONSE_PREFIX.length());
-                    String decryptedResponse = encryptionManager.decrypt(encryptedResponse, selectedDeviceId.trim());
+                    String decryptedResponse = encryptionManager.decryptMessage(encryptedResponse);
                     
                     mainHandler.post(() -> {
                         statusText.setText("Response: " + decryptedResponse);
